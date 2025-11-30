@@ -49,7 +49,7 @@ Extensão para automatizar o envio de múltiplos prompts no Grok Imagine (`https
 
 ## Limitações conhecidas
 
-- Randomização de proporção está desativada (UI do Grok Imagine não expõe um controle estável de proporção para automação).
+- A seleção de proporção depende do menu atual do Grok Imagine; se o site mudar, ajuste os seletores do content script para continuar funcionando.
 - Se o Grok alterar a estrutura do DOM (por exemplo, não usar `<img>` ou usar canvas/background-image), pode ser necessário ajustar os seletores.
 - O monitoramento captura imagens adicionadas durante a automação; imagens já presentes antes de iniciar podem não ser baixadas.
 
@@ -63,4 +63,3 @@ Extensão para automatizar o envio de múltiplos prompts no Grok Imagine (`https
 Se esta ferramenta te ajuda, considere apoiar:
 
 https://ko-fi.com/dentparanoide
-

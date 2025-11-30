@@ -66,12 +66,13 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         prompts: request.prompts,
         delay: request.delay,
         settings: request.settings,
+        mode: request.mode,
       });
     } catch (error) {
       console.error("Erro ao iniciar automação:", error);
       chrome.runtime
         .sendMessage({ action: "automationError", error: error.message })
-        .catch(() => {});
+        .catch(() => { });
     }
   }
 
@@ -97,7 +98,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     request.action === "automationComplete" ||
     request.action === "automationError"
   ) {
-    chrome.runtime.sendMessage(request).catch(() => {});
+    chrome.runtime.sendMessage(request).catch(() => { });
   }
 
   if (request.action === "downloadImage") {
@@ -112,8 +113,10 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         .trim()
         .substring(0, 100);
 
-      // Detecta extensão pelo MIME (data:) ou assume png
-      function detectExtFromUrl(url) {
+      // Detecta extensão pelo MIME (data:) ou assume png/mp4
+      function detectExtFromUrl(url, type) {
+        if (type === 'video') return 'mp4'; // Default for video
+
         try {
           if (url.startsWith("data:image/")) {
             const m = url.match(/^data:image\/([^;]+);/i);
@@ -124,11 +127,11 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
               return sub; // png, webp, gif, etc.
             }
           }
-        } catch (_) {}
+        } catch (_) { }
         return "png";
       }
 
-      const ext = detectExtFromUrl(request.url);
+      const ext = detectExtFromUrl(request.url, request.type);
       let filename = `${safePrompt}_${Date.now()}.${ext}`;
       if (subfolder) filename = `${subfolder}/${filename}`;
 
@@ -148,7 +151,8 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     });
   }
 
-  return true;
+  // We don't keep the message channel open; replies (when needed) are sent via chrome.runtime.sendMessage
+  return false;
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
