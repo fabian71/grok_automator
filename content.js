@@ -138,6 +138,15 @@
         container.appendChild(timerEl);
         container.appendChild(progressTrack);
 
+        const donateEl = document.createElement('div');
+        Object.assign(donateEl.style, {
+            marginTop: '10px',
+            fontSize: '12px',
+            color: '#c5d4ff'
+        });
+        donateEl.innerHTML = 'Gosta do projeto? <span style="color:#ff6b9a;">❤</span> Me paga um cafezinho: <a href="https://ko-fi.com/dentparanoide" target="_blank" rel="noopener noreferrer" style="color:#9bd5ff; text-decoration: underline;">ko-fi.com/dentparanoide</a>';
+        container.appendChild(donateEl);
+
         document.body.appendChild(container);
 
         overlayState.container = container;
