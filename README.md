@@ -1,65 +1,123 @@
-# Grok Prompt Automator
+# Grok Prompt Automator 3.0
 
-Extensao para automatizar envios no Grok Imagine (`https://grok.com/imagine`) com foco em video: envia prompts em lote, tenta aplicar proporcao, aciona upscale (quando disponivel) e baixa os videos gerados automaticamente.
+Extensão para automatizar envios no Grok Imagine (`https://grok.com/imagine`) com suporte completo para **geração de imagens e vídeos**: envia prompts em lote, aplica proporções, faz upscale de vídeos e baixa os arquivos gerados automaticamente.
 
-## Funcionalidades
+## ✨ Funcionalidades
 
-- Modo padrao: Video (Imagem opcional).
-- Envio em lote (um prompt por linha) com delay padrao de 45s (ajustavel).
-- Proporcao fixa padrao 3:2 ou randomizacao entre proporcoes selecionadas.
-- Upscale de video e download automatico: tenta o botao oficial "BAIXAR" e faz fallback para o `src` do video quando necessario.
-- Subpasta opcional dentro de Downloads para organizar arquivos.
-- Persistencia local de prompts e configuracoes.
-- Overlay flutuante no Grok mostrando status, prompt atual, progresso, tempo decorrido e fases (inclui "Upscale do video...").
+### Modos de Geração
+- **Modo Vídeo**: Geração de vídeos com upscale opcional (Beta)
+- **Modo Imagem**: Geração de imagens com download automático
 
-## Requisitos
+### Configurações de Proporção
+- Proporção fixa: **1:1 (Square)**, **2:3 (Portrait)**, **3:2 (Landscape)**
+- **Randomização**: Sorteia automaticamente entre as proporções selecionadas
 
-- Chrome/Edge com suporte a Manifest V3.
-- Permissoes: `storage`, `activeTab`, `scripting`, `downloads`, host `https://grok.com/*`.
+### Download Automático
+- Download automático de vídeos e imagens gerados
+- Prioriza o botão oficial "BAIXAR" do Grok
+- Fallback inteligente via `src` do elemento quando necessário
+- Subpasta personalizável dentro de Downloads
 
-## Instalacao (modo desenvolvedor)
+### Upscale de Vídeo (Beta)
+- Ativa automaticamente o upscale do vídeo após geração
+- Aguarda a conclusão do upscale antes de baixar
 
-1. Baixe/clonar este repositorio e mantenha os arquivos em uma pasta local.
-2. Abra `chrome://extensions` (ou `edge://extensions`).
-3. Ative o "Modo do desenvolvedor".
-4. Clique em "Carregar sem compactacao" (Load unpacked) e selecione a pasta do projeto.
+### ⚙️ Configurações Especiais
+- **Pausa Programada**: A cada X prompts, o script pausa por Y minutos
+- Padrão: Pausa de 3 minutos a cada 90 prompts
+- Ideal para longas sessões de geração, evitando sobrecarga
 
-## Uso
+### Overlay Flutuante
+- Exibe em tempo real na página do Grok:
+  - Status atual (gerando, upscale, pausa, concluído)
+  - Prompt sendo processado
+  - Progresso (X de Y prompts)
+  - Tempo decorrido
+  - Barra de progresso visual
+  - Informação de próxima pausa (quando aplicável)
+  - Contagem regressiva durante pausas
 
-1. Abra `https://grok.com/imagine` e aguarde a pagina carregar.
-2. Abra o popup da extensao.
-3. Cole sua lista de prompts (um por linha).
-4. Ajuste o delay (padrao 45s). Para video com upscale, mantenha um tempo maior.
-5. (Opcional) Defina uma subpasta para os downloads.
-6. Clique em "Iniciar automacao".
-7. Acompanhe o status no popup e na overlay flutuante; use "Parar automacao" para interromper.
+### Persistência
+- Prompts e configurações salvos localmente
+- Retoma automação após recarregamento da página
 
-## Como o download automatico funciona
+## ⚠️ Avisos Inteligentes
 
-- O content script observa novos videos gerados e captura via botao "BAIXAR" pos-upscale ou via `src` do video (`blob:`/`data:`) como fallback.
-- Para video, a extensao usa `.mp4` por padrao. O nome do arquivo e baseado no prompt (sanitizado) + timestamp; se definir subpasta, os arquivos vao para `Downloads/<sua-subpasta>/`.
+- **Modo Vídeo**: Alerta se delay < 40 segundos (recomendado para upscale)
+- **Modo Imagem**: Alerta se delay < 20 segundos (pode causar falha no download)
 
-## Dicas e solucao de problemas
+## 📋 Requisitos
 
-- Esteja na URL exata `https://grok.com/imagine`.
-- Se nada acontecer, recarregue a pagina do Grok e tente novamente.
-- Verifique se o popup mostra "Conectado a pagina do Grok Imagine".
-- Se downloads falharem, veja o console do Service Worker em `chrome://extensions` > Detalhes da extensao > Service Worker.
-- Para videos, use delays maiores (>=40s) quando o upscale estiver ativo, para dar tempo de concluir.
+- Chrome/Edge com suporte a Manifest V3
+- Permissões: `storage`, `activeTab`, `scripting`, `downloads`
+- Host: `https://grok.com/*`
 
-## Limitacoes conhecidas
+## 🔧 Instalação (Modo Desenvolvedor)
 
-- A selecao de proporcao depende do menu atual do Grok Imagine; se o site mudar, ajuste os seletores no content script.
-- A automacao atual prioriza videos; download de imagens nao esta habilitado.
-- Se o Grok alterar o DOM (ex.: nao expor videos com `generated_video.mp4`), pode ser necessario ajustar seletores.
+1. Baixe/clone este repositório para uma pasta local
+2. Abra `chrome://extensions` (ou `edge://extensions`)
+3. Ative o **"Modo do desenvolvedor"**
+4. Clique em **"Carregar sem compactação"** e selecione a pasta do projeto
 
-## Privacidade
+## 🚀 Como Usar
 
-- Dados (prompts e configuracoes) ficam apenas no `chrome.storage.local` do navegador.
-- A extensao nao envia dados para servidores externos.
+1. Abra `https://grok.com/imagine` e aguarde carregar
+2. Clique no ícone da extensão para abrir o popup
+3. Selecione o **Modo de Geração**: Imagem ou Vídeo
+4. Cole sua lista de prompts (um por linha)
+5. Ajuste o **Delay entre envios**:
+   - Vídeo com upscale: recomendado ≥45s
+   - Vídeo sem upscale: recomendado ≥40s
+   - Imagem: recomendado ≥20s
+6. Configure a proporção (fixa ou aleatória)
+7. (Opcional) Ative **Upscale Vídeo (Beta)** no modo vídeo
+8. (Opcional) Configure **Pausas Programadas** para sessões longas
+9. (Opcional) Defina uma subpasta para downloads
+10. Clique em **"Iniciar automação"**
+11. Acompanhe o progresso no overlay flutuante
 
-## Doacao
+## 📥 Como o Download Funciona
 
-Se esta ferramenta te ajuda, considere apoiar:
+### Vídeo
+- Detecta vídeos via `generated_video.mp4` no src
+- Se upscale ativo: aguarda conclusão do upscale
+- Tenta clicar no botão oficial "BAIXAR"
+- Fallback: baixa via src do vídeo (blob:/data:)
+- Arquivo salvo como `.mp4`
 
-https://ko-fi.com/dentparanoide
+### Imagem
+- Detecta imagens geradas no container
+- Aguarda tempo de renderização (delay - 8 segundos)
+- Baixa automaticamente a imagem em formato original
+- Nome baseado no prompt + timestamp
+
+## 💡 Dicas e Solução de Problemas
+
+- Certifique-se de estar em `https://grok.com/imagine`
+- Se nada acontecer, recarregue a página e tente novamente
+- Verifique se o popup mostra "Conectado à página do Grok Imagine"
+- Para vídeos com upscale, use delays maiores (≥45s)
+- Configure pausas programadas para lotes grandes (>90 prompts)
+- Console do Service Worker: `chrome://extensions` > Detalhes > Service Worker
+
+## ⚡ Limitações Conhecidas
+
+- Seletores dependem da estrutura atual do Grok Imagine
+- Se o Grok alterar o DOM, pode ser necessário atualizar seletores
+- Upscale de vídeo depende da disponibilidade do recurso no Grok
+
+## 🔒 Privacidade
+
+- Todos os dados ficam no `chrome.storage.local` do navegador
+- Nenhum dado é enviado para servidores externos
+- A extensão não coleta informações pessoais
+
+## ☕ Doação
+
+Se esta ferramenta te ajuda, considere apoiar o projeto:
+
+**[ko-fi.com/dentparanoide](https://ko-fi.com/dentparanoide)**
+
+---
+
+**Versão 3.0** | Desenvolvido com ❤️
