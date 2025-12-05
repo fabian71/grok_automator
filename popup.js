@@ -28,6 +28,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const upscaleContainer = document.getElementById('upscale-container');
     const upscaleToggle = document.getElementById('toggle-upscale');
 
+    // --- Break Settings Elements ---
+    const breakToggle = document.getElementById('toggle-break');
+    const breakSettings = document.getElementById('break-settings');
+    const breakPromptsInput = document.getElementById('break-prompts');
+    const breakDurationInput = document.getElementById('break-duration');
+
     let isRunning = false;
 
     // --- Function Definitions ---
@@ -35,7 +41,8 @@ document.addEventListener('DOMContentLoaded', function () {
     function loadSettings() {
         const keys = [
             'prompts', 'delay', 'autoDownload', 'downloadSubfolder',
-            'randomizeToggle', 'randomizeOptions', 'generationMode', 'aspectRatio', 'upscaleVideo'
+            'randomizeToggle', 'randomizeOptions', 'generationMode', 'aspectRatio', 'upscaleVideo',
+            'breakEnabled', 'breakPrompts', 'breakDuration'
         ];
         chrome.storage.local.get(keys).then((result) => {
             promptsTextarea.value = result.prompts || '';
@@ -49,6 +56,11 @@ document.addEventListener('DOMContentLoaded', function () {
             randomizeToggle.checked = result.randomizeToggle || false;
             aspectRatioSelect.value = result.aspectRatio || '3:2';
             upscaleToggle.checked = result.upscaleVideo || false;
+
+            // Break settings
+            breakToggle.checked = result.breakEnabled || false;
+            breakPromptsInput.value = result.breakPrompts || 90;
+            breakDurationInput.value = result.breakDuration || 3;
 
             if (result.randomizeOptions) {
                 randomOptionCheckboxes.forEach(box => {
@@ -69,6 +81,7 @@ document.addEventListener('DOMContentLoaded', function () {
             updateRandomizeUI();
             updateDownloadUI();
             updateDelayWarning();
+            updateBreakUI();
         }).catch(error => console.error('Erro ao carregar dados:', error));
     }
 
@@ -87,7 +100,10 @@ document.addEventListener('DOMContentLoaded', function () {
             aspectRatio: aspectRatioSelect.value,
             randomizeOptions: randomizeOptions,
             generationMode: modeVideoRadio.checked ? 'video' : 'image',
-            upscaleVideo: upscaleToggle.checked
+            upscaleVideo: upscaleToggle.checked,
+            breakEnabled: breakToggle.checked,
+            breakPrompts: parseInt(breakPromptsInput.value) || 90,
+            breakDuration: parseInt(breakDurationInput.value) || 3
         }).catch(error => console.error('Erro no auto-save:', error));
     }
 
@@ -103,21 +119,35 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function updateDelayWarning() {
         const delay = parseInt(delayInput.value) || 0;
-        const showWarning = modeVideoRadio.checked && delay > 0 && delay < 40;
+
+        // Video mode warning: delay < 40
+        const showVideoWarning = modeVideoRadio.checked && delay > 0 && delay < 40;
         if (videoDelayWarning) {
-            videoDelayWarning.style.display = showWarning ? 'block' : 'none';
+            videoDelayWarning.style.display = showVideoWarning ? 'block' : 'none';
+        }
+
+        // Image mode warning: delay < 20
+        const imageDelayWarning = document.getElementById('image-delay-warning');
+        const showImageWarning = modeImageRadio.checked && delay > 0 && delay < 20;
+        if (imageDelayWarning) {
+            imageDelayWarning.style.display = showImageWarning ? 'block' : 'none';
         }
     }
 
     function updateDownloadUI() {
-        const isImageMode = modeImageRadio.checked;
-        const disableDownloads = isImageMode;
+        // Always enable download settings for both Image and Video modes
         [autoDownloadCheckbox, downloadSubfolderName, saveDownloadFolder].forEach(el => {
-            el.disabled = disableDownloads;
+            el.disabled = false;
         });
         if (downloadSettingsSection) {
-            downloadSettingsSection.style.opacity = disableDownloads ? '0.5' : '1';
-            downloadSettingsSection.style.pointerEvents = disableDownloads ? 'none' : 'auto';
+            downloadSettingsSection.style.opacity = '1';
+            downloadSettingsSection.style.pointerEvents = 'auto';
+        }
+    }
+
+    function updateBreakUI() {
+        if (breakSettings) {
+            breakSettings.style.display = breakToggle.checked ? 'block' : 'none';
         }
     }
 
@@ -168,7 +198,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     randomize: randomizeToggle.checked,
                     aspectRatios: ratiosToRandomize,
                     fixedRatio: aspectRatioSelect.value,
-                    upscale: upscaleToggle.checked
+                    upscale: upscaleToggle.checked,
+                    autoDownload: autoDownloadCheckbox.checked,
+                    breakEnabled: breakToggle.checked,
+                    breakPrompts: parseInt(breakPromptsInput.value) || 90,
+                    breakDuration: parseInt(breakDurationInput.value) || 3
                 },
                 mode: modeVideoRadio.checked ? 'video' : 'image'
             });
@@ -272,6 +306,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     modeImageRadio.addEventListener('change', updateModeUI);
     modeVideoRadio.addEventListener('change', updateModeUI);
+
+    // Break settings listeners
+    breakToggle.addEventListener('change', () => {
+        updateBreakUI();
+        saveSettings();
+    });
+    breakPromptsInput.addEventListener('input', saveSettings);
+    breakDurationInput.addEventListener('input', saveSettings);
 
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'updateStatus') {

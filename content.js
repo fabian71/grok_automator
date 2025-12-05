@@ -17,15 +17,75 @@
             randomize: false,
             aspectRatios: [],
             fixedRatio: '3:2',
-            upscale: false
+            upscale: false,
+            autoDownload: false,
+            breakEnabled: false,
+            breakPrompts: 90,
+            breakDuration: 3
         },
         mode: 'video',
         modeApplied: false,
         startTime: null,
         upscaledPrompts: new Set(),
-        processingPrompts: new Set(), // Lock to prevent duplicate processing
-        downloadedVideos: new Set()
+        processingPrompts: new Set(),
+        downloadedVideos: new Set(),
+        processedVideoUrls: new Set(),
+        imageDownloadInitiated: false,
+        restoredFromReload: false,
+        promptsSinceLastBreak: 0,
+        isOnBreak: false,
+        breakEndTime: null
     };
+
+    // --- Persistence Helpers ---
+    async function saveAutomationState() {
+        const stateToSave = {
+            ...automationState,
+            upscaledPrompts: Array.from(automationState.upscaledPrompts),
+            processingPrompts: Array.from(automationState.processingPrompts),
+            downloadedVideos: Array.from(automationState.downloadedVideos)
+        };
+        delete stateToSave.timeoutId;
+        await chrome.storage.local.set({ 'grokAutomationState': stateToSave });
+    }
+
+    async function clearAutomationState() {
+        await chrome.storage.local.remove('grokAutomationState');
+    }
+
+    async function loadAutomationState() {
+        try {
+            const result = await chrome.storage.local.get('grokAutomationState');
+            if (result.grokAutomationState && result.grokAutomationState.isRunning) {
+                const saved = result.grokAutomationState;
+                automationState = {
+                    ...saved,
+                    upscaledPrompts: new Set(saved.upscaledPrompts),
+                    processingPrompts: new Set(saved.processingPrompts),
+                    downloadedVideos: new Set(saved.downloadedVideos),
+                    timeoutId: null,
+                    restoredFromReload: true,
+                    modeApplied: false // Force re-check of mode on new page
+                };
+
+                console.log('♻️ Estado da automação restaurado após reload.');
+
+                if (automationState.currentIndex >= automationState.prompts.length) {
+                    console.log('✅ Estado restaurado indica conclusão. Finalizando...');
+                    handleAutomationComplete();
+                    return;
+                }
+
+                startOverlayTimer();
+                // Wait for page hydration/interactivity
+                setTimeout(() => {
+                    runAutomation();
+                }, 3000);
+            }
+        } catch (e) {
+            console.error('Erro ao carregar estado:', e);
+        }
+    }
 
     // --- Selectors ---
     const SELECTORS = {
@@ -113,6 +173,14 @@
         });
         timerEl.textContent = 'Tempo: 00:00';
 
+        const breakInfoEl = document.createElement('div');
+        Object.assign(breakInfoEl.style, {
+            marginTop: '6px',
+            fontSize: '11px',
+            color: '#ffcc80',
+            display: 'none'
+        });
+
         const progressTrack = document.createElement('div');
         Object.assign(progressTrack.style, {
             marginTop: '10px',
@@ -136,6 +204,7 @@
         container.appendChild(promptEl);
         container.appendChild(counterEl);
         container.appendChild(timerEl);
+        container.appendChild(breakInfoEl);
         container.appendChild(progressTrack);
 
         const donateEl = document.createElement('div');
@@ -154,6 +223,7 @@
         overlayState.promptEl = promptEl;
         overlayState.counterEl = counterEl;
         overlayState.timerEl = timerEl;
+        overlayState.breakInfoEl = breakInfoEl;
         overlayState.progressBar = progressBar;
 
         requestAnimationFrame(() => {
@@ -189,6 +259,33 @@
             const pct = Math.min(100, Math.max(0, Math.round(((index || 0) / total) * 100)));
             overlayState.progressBar.style.width = `${pct}%`;
         }
+
+        // Update break info - only show if total prompts > breakPrompts setting
+        const shouldShowBreakInfo = overlayState.breakInfoEl &&
+            automationState.settings.breakEnabled &&
+            automationState.prompts.length > automationState.settings.breakPrompts;
+
+        if (shouldShowBreakInfo) {
+            overlayState.breakInfoEl.style.display = 'block';
+
+            if (automationState.isOnBreak && automationState.breakEndTime) {
+                const remainingMs = automationState.breakEndTime - Date.now();
+                if (remainingMs > 0) {
+                    const remainingSec = Math.ceil(remainingMs / 1000);
+                    overlayState.breakInfoEl.textContent = `☕ Pausa: ${formatDuration(remainingSec)} restantes`;
+                    overlayState.breakInfoEl.style.color = '#ff9800';
+                } else {
+                    overlayState.breakInfoEl.textContent = '☕ Retomando...';
+                }
+            } else {
+                const promptsUntilBreak = automationState.settings.breakPrompts - automationState.promptsSinceLastBreak;
+                overlayState.breakInfoEl.textContent = `⏱️ Próxima pausa em ${promptsUntilBreak} prompts (${automationState.settings.breakDuration} min)`;
+                overlayState.breakInfoEl.style.color = '#ffcc80';
+            }
+        } else if (overlayState.breakInfoEl) {
+            overlayState.breakInfoEl.style.display = 'none';
+        }
+
         if (overlayState.container) overlayState.container.style.display = 'block';
     }
 
@@ -674,6 +771,7 @@
             processingPrompts: new Set(),
             downloadedVideos: new Set()
         };
+        clearAutomationState();
         hideOverlay();
         stopOverlayTimer();
     }
@@ -684,10 +782,25 @@
             return;
         }
 
+        // --- Reload Logic for Image Mode ---
+        // Se estiver no modo imagem e NÃO acabou de ser restaurado, recarrega a página para limpar o chat
+        if (automationState.mode === 'image' && !automationState.restoredFromReload) {
+            console.log('🔄 Recarregando página para limpar estado (Modo Imagem)...');
+            await saveAutomationState();
+            window.location.href = 'https://grok.com/imagine';
+            return;
+        }
+        automationState.restoredFromReload = false; // Reset flag
+
+        automationState.imageDownloadInitiated = false; // Reset for the new prompt
+
         const currentPrompt = automationState.prompts[automationState.currentIndex];
         let currentAspectRatio = null;
 
-        if (!automationState.modeApplied) {
+        // For video mode: always select mode before each prompt (Grok may reset it)
+        // For image mode: only select once
+        if (automationState.mode === 'video' || !automationState.modeApplied) {
+            console.log(`🎯 Selecionando modo ${automationState.mode} antes do prompt...`);
             await selectGenerationMode(automationState.mode);
             automationState.modeApplied = true;
         }
@@ -718,9 +831,37 @@
             await sleep(500);
             await submitPrompt(currentPrompt, currentAspectRatio);
             automationState.currentIndex++;
+            automationState.promptsSinceLastBreak++;
+            saveAutomationState(); // Persist progress immediately
 
             if (automationState.isRunning && automationState.currentIndex < automationState.prompts.length) {
-                automationState.timeoutId = setTimeout(runAutomation, automationState.delay * 1000);
+                // Check if it's time for a break
+                if (automationState.settings.breakEnabled &&
+                    automationState.promptsSinceLastBreak >= automationState.settings.breakPrompts) {
+
+                    const breakDurationMs = automationState.settings.breakDuration * 60 * 1000;
+                    automationState.isOnBreak = true;
+                    automationState.breakEndTime = Date.now() + breakDurationMs;
+
+                    console.log(`☕ Iniciando pausa de ${automationState.settings.breakDuration} minutos após ${automationState.promptsSinceLastBreak} prompts...`);
+
+                    updateOverlay({
+                        status: '☕ Pausa programada',
+                        prompt: `Descansando por ${automationState.settings.breakDuration} minutos...`,
+                        index: automationState.currentIndex,
+                        total: automationState.prompts.length
+                    });
+
+                    automationState.timeoutId = setTimeout(() => {
+                        automationState.isOnBreak = false;
+                        automationState.breakEndTime = null;
+                        automationState.promptsSinceLastBreak = 0;
+                        console.log('☕ Pausa concluída, retomando automação...');
+                        runAutomation();
+                    }, breakDurationMs);
+                } else {
+                    automationState.timeoutId = setTimeout(runAutomation, automationState.delay * 1000);
+                }
             } else if (automationState.isRunning) {
                 sendMessageToBackground({
                     action: 'updateStatus',
@@ -777,6 +918,9 @@
             automationState.upscaledPrompts = new Set();
             automationState.processingPrompts = new Set();
             automationState.downloadedVideos = new Set();
+            automationState.promptsSinceLastBreak = 0;
+            automationState.isOnBreak = false;
+            automationState.breakEndTime = null;
 
             startOverlayTimer();
             runAutomation();
@@ -814,8 +958,12 @@
                 if (type === 'video') {
                     automationState.downloadedVideos.add(promptIndex);
                 }
+                // Check if this was the last prompt and we are done
                 if (automationState.currentIndex >= automationState.prompts.length) {
-                    handleAutomationComplete();
+                    // Ensure we don't call this multiple times
+                    if (automationState.isRunning) {
+                        handleAutomationComplete();
+                    }
                 }
             }, 500);
         };
@@ -913,43 +1061,69 @@
     function handleImageGeneration(mutations) {
         if (!automationState.isRunning) return;
 
+        const hasRelevantChanges = mutations.some(m => m.addedNodes.length > 0 || (m.attributeName === 'src'));
+        if (!hasRelevantChanges) return;
+
+        // --- New Image Logic (Image Mode) ---
+        if (automationState.mode === 'image' && automationState.settings.autoDownload && !automationState.imageDownloadInitiated) {
+            const unprocessedItems = Array.from(document.querySelectorAll('div[role="listitem"]:not([data-gpa-image-processed="true"])'));
+
+            if (unprocessedItems.length > 0) {
+                // Sort by vertical position to find the newest item (closest to the top)
+                unprocessedItems.sort((a, b) => {
+                    const topA = parseFloat(a.style.top) || Infinity;
+                    const topB = parseFloat(b.style.top) || Infinity;
+                    return topA - topB;
+                });
+                const topMostItem = unprocessedItems[0];
+
+                if (topMostItem) {
+                    // Calculate download delay: delay - 8 seconds, minimum 5 seconds
+                    const downloadDelay = Math.max(5, automationState.delay - 8) * 1000;
+                    console.log(`⏱️ Aguardando ${downloadDelay / 1000}s antes de iniciar download da imagem...`);
+
+                    setTimeout(() => {
+                        if (!automationState.isRunning) return;
+                        if (automationState.imageDownloadInitiated) return;
+                        const playIcon = topMostItem.querySelector('svg.lucide-play');
+                        const image = topMostItem.querySelector('img[src^="data:image/"]');
+
+                        if (playIcon && image && image.src) {
+                            automationState.imageDownloadInitiated = true;
+                            console.log('🖼️ Imagem mais recente detectada (pela posição). Baixando...');
+                            topMostItem.dataset.gpaImageProcessed = 'true';
+                            triggerDownload(image.src, 'image');
+                        }
+                    }, downloadDelay);
+                }
+            }
+        }
+
+        // --- Existing Video Logic (Video Mode) ---
         for (const mutation of mutations) {
             if (mutation.type === 'childList') {
                 for (const node of mutation.addedNodes) {
                     if (node.nodeType !== 1) continue;
-
-                    // Images - ONLY process if in image mode
-                    if (automationState.mode === 'image') {
-                        const images = node.matches('img') ? [node] : Array.from(node.querySelectorAll('img'));
-                        images.forEach(img => {
-                            const isBlob = img.src && img.src.startsWith('blob:');
-                            const isDataImage = img.src && img.src.startsWith('data:image/');
-                            if ((isBlob || isDataImage) && img.src && img.dataset.processedSrc !== img.src) {
-                                img.dataset.processedSrc = img.src;
-                                triggerDownload(img.src, 'image');
-                            }
-                        });
-                    }
-
-                    // Videos - ONLY process if in video mode
                     if (automationState.mode === 'video') {
                         const videos = node.matches('video') ? [node] : Array.from(node.querySelectorAll('video'));
                         videos.forEach(video => {
-                            if (video.src && video.src.includes('generated_video.mp4') && video.dataset.processedSrc !== video.src) {
-                                video.dataset.processedSrc = video.src;
-                                console.log('🎬 Vídeo gerado detectado:', video.src);
+                            const videoUrl = video.src;
+                            if (videoUrl && videoUrl.includes('generated_video.mp4') && !automationState.processedVideoUrls.has(videoUrl)) {
+                                automationState.processedVideoUrls.add(videoUrl); // Mark URL as processed immediately
+                                video.dataset.processedSrc = videoUrl;
+                                console.log('🎬 Vídeo gerado detectado:', videoUrl);
                                 processVideoElement(video);
                             }
                         });
                     }
                 }
-            }
-            // Handle attribute changes (src) for existing videos
-            else if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
+            } else if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
                 const target = mutation.target;
-                if (automationState.mode === 'video' && target.tagName === 'VIDEO' && target.src && target.src.includes('generated_video.mp4') && target.dataset.processedSrc !== target.src) {
-                    target.dataset.processedSrc = target.src;
-                    console.log('🎬 Vídeo atualizado detectado:', target.src);
+                const videoUrl = target.src;
+                if (automationState.mode === 'video' && target.tagName === 'VIDEO' && videoUrl && videoUrl.includes('generated_video.mp4') && !automationState.processedVideoUrls.has(videoUrl)) {
+                    automationState.processedVideoUrls.add(videoUrl); // Mark URL as processed immediately
+                    target.dataset.processedSrc = videoUrl;
+                    console.log('🎬 Vídeo atualizado detectado:', videoUrl);
                     processVideoElement(target);
                 }
             }
@@ -965,13 +1139,17 @@
             return;
         }
 
+        // SET LOCK SYNCHRONOUSLY - This is critical to prevent race conditions
+        automationState.processingPrompts.add(currentPromptIndex);
+
         const process = async () => {
             if (shouldUpscale) {
                 if (automationState.upscaledPrompts.has(currentPromptIndex)) {
+                    automationState.processingPrompts.delete(currentPromptIndex);
                     return;
                 }
 
-                automationState.processingPrompts.add(currentPromptIndex);
+                // Lock already set synchronously above
                 const result = await upscaleVideo(video);
 
                 if (result.success) {
@@ -998,12 +1176,35 @@
                 }
                 automationState.processingPrompts.delete(currentPromptIndex);
             } else {
+                // Non-upscale path - lock already set synchronously above
+                console.log('⏳ Aguardando renderização final do vídeo (2s)...');
+                await sleep(2000); // Wait for UI to settle (button might appear)
+
+                // Double check after sleep
+                if (automationState.downloadedVideos.has(currentPromptIndex)) {
+                    automationState.processingPrompts.delete(currentPromptIndex);
+                    return;
+                }
+
+                console.log('📥 Fazendo download do vídeo SD (upscale desabilitado)');
+
+                // Try to click the button first
                 const clicked = clickVideoDownloadButton();
+
+                // Mark as downloaded IMMEDIATELY to prevent race conditions during the process
+                automationState.downloadedVideos.add(currentPromptIndex);
+
                 if (clicked) {
-                    automationState.downloadedVideos.add(currentPromptIndex);
+                    console.log('✅ Botão de download clicado.');
+                    if (automationState.currentIndex >= automationState.prompts.length) {
+                        handleAutomationComplete();
+                    }
                 } else {
+                    console.log('⚠️ Botão de download não encontrado. Usando fallback da extensão.');
                     triggerDownload(video.src, 'video', currentPromptIndex);
                 }
+
+                automationState.processingPrompts.delete(currentPromptIndex);
             }
         };
         process();
@@ -1026,8 +1227,14 @@
             startTime: null,
             upscaledPrompts: new Set(),
             processingPrompts: new Set(),
-            downloadedVideos: new Set()
+            downloadedVideos: new Set(),
+            processedVideoUrls: new Set(),
+            imageDownloadInitiated: false,
+            promptsSinceLastBreak: 0,
+            isOnBreak: false,
+            breakEndTime: null
         };
+        clearAutomationState();
         if (stopTimer) stopOverlayTimer();
         if (!keepOverlay) hideOverlay();
     };
@@ -1047,12 +1254,19 @@
             total: automationState.prompts.length,
             elapsedSeconds: elapsed
         });
-        resetAutomation({ keepOverlay: true, stopTimer: false });
+        resetAutomation({ keepOverlay: true, stopTimer: true });
     };
 
     const __originalProcessVideoElement = processVideoElement;
     processVideoElement = function (video) {
         const currentPromptIndex = automationState.currentIndex - 1;
+
+        // Early return if already processing or downloaded
+        if (automationState.processingPrompts.has(currentPromptIndex) || automationState.downloadedVideos.has(currentPromptIndex)) {
+            console.log(`🔒 [Wrapper] Prompt ${currentPromptIndex} já está sendo processado ou baixado. Ignorando.`);
+            return;
+        }
+
         const promptText = automationState.prompts[currentPromptIndex] || '';
         if (automationState.settings.upscale) {
             updateOverlay({
@@ -1069,6 +1283,7 @@
         const observer = new MutationObserver(handleImageGeneration);
         observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
         sendMessageToBackground({ action: 'contentScriptReady' });
+        loadAutomationState();
         console.log('🚀 Grok Prompt Automator carregado!');
     }
 

@@ -44,27 +44,28 @@
             <div class="section">
                 <label for="delay-input" class="label">Delay entre envios (segundos):</label>
                 <input type="number" id="delay-input" class="input" value="45" min="1" max="300">
-                <div id="video-delay-warning" style="display: none; margin-top: 8px; padding: 8px; border-radius: 8px; background: #fff7ed; color: #b45309; font-size: 12px;">
+                <div id="video-delay-warning"
+                    style="display: none; margin-top: 8px; padding: 8px; border-radius: 8px; background: #fff7ed; color: #b45309; font-size: 12px;">
                     Atenção: este tempo pode ser insuficiente para o Grok gerar e fazer upscale do vídeo.
                 </div>
             </div>
 
             <div class="section">
-                
+
                 <label class="label">Proporção (Aspect Ratio):</label>
                 <select id="aspect-ratio-select" class="input" style="margin-bottom: 10px;">
                     <option value="1:1">Square (1:1)</option>
                     <option value="2:3">Portrait (2:3)</option>
                     <option value="3:2" selected>Landscape (3:2)</option>
                 </select>
-                
+
 
                 <div class="checkbox-container">
                     <input type="checkbox" id="toggle-randomize">
                     <label for="toggle-randomize" class="label">Randomizar proporção</label>
                 </div>
 
-                
+
 
                 <div id="randomize-section"
                     style="display: none; margin-top: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
@@ -90,7 +91,31 @@
                     <input type="checkbox" id="toggle-upscale">
                     <label for="toggle-upscale" class="label">Upscale Vídeo (Beta)</label>
                 </div>
-                
+
+            </div>
+
+            <div class="section special-settings"
+                style="margin-top: 15px; padding: 12px; border: 1px solid #444; border-radius: 8px; background-color: rgba(255,255,255,0.03);">
+                <label class="label" style="font-weight: bold; margin-bottom: 10px; display: block;">⚙️ Configurações
+                    Especiais</label>
+
+                <div class="checkbox-container" style="margin-bottom: 10px;">
+                    <input type="checkbox" id="toggle-break">
+                    <label for="toggle-break" class="label">Pausar a cada X prompts</label>
+                </div>
+
+                <div id="break-settings" style="display: none; margin-left: 20px;">
+                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                        <label for="break-prompts" class="label" style="white-space: nowrap;">A cada</label>
+                        <input type="number" id="break-prompts" class="input" value="90" min="1" style="width: 70px;">
+                        <span class="label">prompts</span>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <label for="break-duration" class="label" style="white-space: nowrap;">Pausar por</label>
+                        <input type="number" id="break-duration" class="input" value="3" min="1" style="width: 70px;">
+                        <span class="label">minutos</span>
+                    </div>
+                </div>
             </div>
 
             <div class="section download-settings">
@@ -106,6 +131,11 @@
                         <button id="saveDownloadFolder" class="btn">Salvar</button>
                     </div>
                     <div id="downloadFolderStatus" style="font-size: 12px; margin-top: 5px;"></div>
+                </div>
+                <div id="image-delay-warning"
+                    style="display: none; margin-top: 10px; padding: 10px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; color: #856404; font-size: 12px;">
+                    ⚠️ <strong>Atenção:</strong> No modo Imagem, um delay abaixo de 20 segundos pode causar falhas no
+                    download automático.
                 </div>
             </div>
 
