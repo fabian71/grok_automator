@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Download elements
     const autoDownloadCheckbox = document.getElementById('auto-download-checkbox');
+    const savePromptTxtCheckbox = document.getElementById('save-prompt-txt-checkbox');
     const downloadSubfolderName = document.getElementById('downloadSubfolderName');
     const saveDownloadFolder = document.getElementById('saveDownloadFolder');
     const downloadFolderStatus = document.getElementById('downloadFolderStatus');
@@ -40,7 +41,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function loadSettings() {
         const keys = [
-            'prompts', 'delay', 'autoDownload', 'downloadSubfolder',
+            'prompts', 'delay', 'autoDownload', 'savePromptTxt', 'downloadSubfolder',
             'randomizeToggle', 'randomizeOptions', 'generationMode', 'aspectRatio', 'upscaleVideo',
             'breakEnabled', 'breakPrompts', 'breakDuration'
         ];
@@ -48,6 +49,7 @@ document.addEventListener('DOMContentLoaded', function () {
             promptsTextarea.value = result.prompts || '';
             delayInput.value = result.delay || 45;
             autoDownloadCheckbox.checked = result.autoDownload || false;
+            savePromptTxtCheckbox.checked = result.savePromptTxt || false;
             downloadSubfolderName.value = result.downloadSubfolder || '';
             if (result.downloadSubfolder) {
                 downloadFolderStatus.textContent = `Salvo em: 'Downloads/${result.downloadSubfolder}'`;
@@ -95,6 +97,7 @@ document.addEventListener('DOMContentLoaded', function () {
             prompts: promptsTextarea.value.trim(),
             delay: parseInt(delayInput.value) || 45,
             autoDownload: autoDownloadCheckbox.checked,
+            savePromptTxt: savePromptTxtCheckbox.checked,
             downloadSubfolder: downloadSubfolderName.value.trim(),
             randomizeToggle: randomizeToggle.checked,
             aspectRatio: aspectRatioSelect.value,
@@ -287,7 +290,7 @@ document.addEventListener('DOMContentLoaded', function () {
     saveDownloadFolder.addEventListener('click', saveSubfolder);
 
     const elementsToAutoSave = [
-        promptsTextarea, delayInput, autoDownloadCheckbox,
+        promptsTextarea, delayInput, autoDownloadCheckbox, savePromptTxtCheckbox,
         randomizeToggle, aspectRatioSelect, ...randomOptionCheckboxes,
         modeImageRadio, modeVideoRadio, upscaleToggle
     ];

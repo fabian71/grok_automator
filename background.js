@@ -102,12 +102,13 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
   }
 
   if (request.action === "downloadImage") {
-    chrome.storage.local.get(["autoDownload", "downloadSubfolder"]).then((settings) => {
+    chrome.storage.local.get(["autoDownload", "savePromptTxt", "downloadSubfolder"]).then((settings) => {
       if (!settings.autoDownload) return;
 
       const subfolder = settings.downloadSubfolder ? settings.downloadSubfolder.trim() : "";
+      const originalPrompt = request.prompt || "imagem"; // Keep original prompt for txt file
 
-      const safePrompt = (request.prompt || "imagem")
+      const safePrompt = originalPrompt
         .replace(/[\\/:*?"<>|]/g, "_")
         .replace(/[^a-zA-Z0-9_\s\-]/g, "")
         .trim()
@@ -132,10 +133,26 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       }
 
       const ext = detectExtFromUrl(request.url, request.type);
-      let filename = `${safePrompt}_${Date.now()}.${ext}`;
-      if (subfolder) filename = `${subfolder}/${filename}`;
+      const timestamp = Date.now();
+      const baseFilename = `${safePrompt}_${timestamp}`;
+      let filename = `${baseFilename}.${ext}`;
+      let txtFilename = `${baseFilename}.txt`;
 
-      chrome.downloads.download({ url: request.url, filename }, () => {
+      if (subfolder) {
+        filename = `${subfolder}/${filename}`;
+        txtFilename = `${subfolder}/${txtFilename}`;
+      }
+
+      // Download options - use saveAs to ensure subfolder creation
+      const downloadOptions = {
+        url: request.url,
+        filename: filename,
+        conflictAction: 'uniquify', // Avoid overwriting files
+        saveAs: false // Set to false for automatic download without dialog
+      };
+
+      // Download the image/video
+      chrome.downloads.download(downloadOptions, (downloadId) => {
         if (chrome.runtime.lastError) {
           console.error(
             `Falha ao baixar imagem: ${chrome.runtime.lastError.message}`,
@@ -146,6 +163,31 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
             message: `Erro ao salvar: ${chrome.runtime.lastError.message.split(": ")[1] || "desconhecido"}`,
             type: "error",
           });
+        } else {
+          console.log(`Download iniciado com sucesso. ID: ${downloadId}, Caminho: ${filename}`);
+
+          // Create and download the .txt file with the prompt (if enabled)
+          if (settings.savePromptTxt) {
+            // Use Data URL instead of Blob URL (works in Service Workers)
+            const txtContent = originalPrompt;
+            const base64Content = btoa(unescape(encodeURIComponent(txtContent)));
+            const txtDataUrl = `data:text/plain;base64,${base64Content}`;
+
+            const txtDownloadOptions = {
+              url: txtDataUrl,
+              filename: txtFilename,
+              conflictAction: 'uniquify',
+              saveAs: false
+            };
+
+            chrome.downloads.download(txtDownloadOptions, (txtDownloadId) => {
+              if (chrome.runtime.lastError) {
+                console.error(`Falha ao salvar arquivo de texto: ${chrome.runtime.lastError.message}`);
+              } else {
+                console.log(`Arquivo de texto salvo com sucesso. ID: ${txtDownloadId}, Caminho: ${txtFilename}`);
+              }
+            });
+          }
         }
       });
     });
