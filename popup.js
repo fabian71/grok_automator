@@ -35,7 +35,23 @@ document.addEventListener('DOMContentLoaded', function () {
     const breakPromptsInput = document.getElementById('break-prompts');
     const breakDurationInput = document.getElementById('break-duration');
 
+    // --- Version Elements ---
+    const versionBadge = document.getElementById('version-badge');
+    const versionFooter = document.getElementById('version-footer');
+
     let isRunning = false;
+
+    // --- Display Version ---
+    function displayVersion() {
+        const manifest = chrome.runtime.getManifest();
+        const version = manifest.version;
+        if (versionBadge) {
+            versionBadge.textContent = `v${version}`;
+        }
+        if (versionFooter) {
+            versionFooter.textContent = `Versão ${version}`;
+        }
+    }
 
     // --- Function Definitions ---
 
@@ -283,6 +299,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // --- Event Listeners ---
+    displayVersion();
     loadSettings();
 
     startBtn.addEventListener('click', startAutomation);
