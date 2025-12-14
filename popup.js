@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const delayInput = document.getElementById('delay-input');
     const startBtn = document.getElementById('start-btn');
     const stopBtn = document.getElementById('stop-btn');
+    const resetBtn = document.getElementById('reset-btn');
     const statusText = document.getElementById('status-text');
     const progressInfo = document.getElementById('progress-info');
     const statusDiv = document.querySelector('.status');
@@ -59,7 +60,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const keys = [
             'prompts', 'delay', 'autoDownload', 'savePromptTxt', 'downloadSubfolder',
             'randomizeToggle', 'randomizeOptions', 'generationMode', 'aspectRatio', 'upscaleVideo',
-            'breakEnabled', 'breakPrompts', 'breakDuration'
+            'breakEnabled', 'breakPrompts', 'breakDuration', 'isRunning'
         ];
         chrome.storage.local.get(keys).then((result) => {
             promptsTextarea.value = result.prompts || '';
@@ -79,6 +80,12 @@ document.addEventListener('DOMContentLoaded', function () {
             breakToggle.checked = result.breakEnabled || false;
             breakPromptsInput.value = result.breakPrompts || 90;
             breakDurationInput.value = result.breakDuration || 3;
+
+            // Restore running state
+            if (result.isRunning) {
+                isRunning = true;
+                updateUI();
+            }
 
             if (result.randomizeOptions) {
                 randomOptionCheckboxes.forEach(box => {
@@ -207,6 +214,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             isRunning = true;
+            chrome.storage.local.set({ isRunning: true }).catch(err => console.error('Erro ao salvar estado:', err));
             updateUI();
 
             await chrome.runtime.sendMessage({
@@ -238,6 +246,7 @@ document.addEventListener('DOMContentLoaded', function () {
     async function stopAutomation() {
         try {
             isRunning = false;
+            chrome.storage.local.set({ isRunning: false }).catch(err => console.error('Erro ao salvar estado:', err));
             updateUI();
             await chrome.runtime.sendMessage({ action: 'stopAutomation' });
             showStatus('Automação interrompida pelo usuário', 'stopped');
@@ -247,6 +256,29 @@ document.addEventListener('DOMContentLoaded', function () {
             showStatus('Erro ao parar automação', 'error');
         }
     }
+
+    async function resetQueue() {
+        try {
+            isRunning = false;
+            chrome.storage.local.set({ isRunning: false }).catch(err => console.error('Erro ao salvar estado:', err));
+            updateUI();
+
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            const currentTab = tabs[0];
+
+            if (currentTab && currentTab.url.includes('grok.com/imagine')) {
+                await chrome.tabs.sendMessage(currentTab.id, { action: 'resetQueue' });
+            }
+
+            showStatus('Fila zerada e automação parada', 'stopped');
+            progressInfo.textContent = '';
+        } catch (error) {
+            console.error('Erro ao zerar fila:', error);
+            showStatus('Fila zerada (se houver erro, recarregue a página)', 'stopped');
+            progressInfo.textContent = '';
+        }
+    }
+
 
     function saveSubfolder() {
         const subfolder = downloadSubfolderName.value.trim();
@@ -304,6 +336,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     startBtn.addEventListener('click', startAutomation);
     stopBtn.addEventListener('click', stopAutomation);
+    resetBtn.addEventListener('click', resetQueue);
     saveDownloadFolder.addEventListener('click', saveSubfolder);
 
     const elementsToAutoSave = [
@@ -344,12 +377,14 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         if (request.action === 'automationComplete') {
             isRunning = false;
+            chrome.storage.local.set({ isRunning: false }).catch(err => console.error('Erro ao salvar estado:', err));
             updateUI();
             showStatus('Automação concluída!', 'success');
             progressInfo.textContent = `Todos os ${request.totalPrompts} prompts foram enviados`;
         }
         if (request.action === 'automationError') {
             isRunning = false;
+            chrome.storage.local.set({ isRunning: false }).catch(err => console.error('Erro ao salvar estado:', err));
             updateUI();
             showStatus(`Erro: ${request.error}`, 'error');
             progressInfo.textContent = '';

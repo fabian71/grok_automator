@@ -195,6 +195,22 @@ body {
     color: #d63384;
 }
 
+.btn-warning {
+    background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+    color: #d63031;
+    font-weight: 700;
+}
+
+.reset-controls {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.reset-controls .btn {
+    flex: 1;
+}
+
 .status {
     background: #f8f9fa;
     padding: 16px;

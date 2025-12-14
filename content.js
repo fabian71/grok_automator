@@ -935,6 +935,13 @@
             return true;
         }
 
+        if (request.action === 'resetQueue') {
+            resetAutomation();
+            sendMessageToBackground({ action: 'updateStatus', message: 'Fila zerada e automação parada', type: 'stopped' });
+            sendResponse({ status: 'reset' });
+            return true;
+        }
+
         return false;
     });
 
