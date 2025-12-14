@@ -1,8 +1,13 @@
-# Grok Prompt Automator 3.0
+# Grok Prompt Automator 1.3.1
 
 Extensão para automatizar envios no Grok Imagine (`https://grok.com/imagine`) com suporte completo para **geração de imagens e vídeos**: envia prompts em lote, aplica proporções, faz upscale de vídeos e baixa os arquivos gerados automaticamente.
 
 ## ✨ Funcionalidades
+
+### Interface
+- **Display de Versão**: Badge no header e versão no footer
+- **Controles Aprimorados**: Botões para Iniciar, Parar e Zerar Fila
+- **Estado Persistente**: Botão "Parar" funciona mesmo após reabrir o popup
 
 ### Modos de Geração
 - **Modo Vídeo**: Geração de vídeos com upscale opcional (Beta)
@@ -13,9 +18,10 @@ Extensão para automatizar envios no Grok Imagine (`https://grok.com/imagine`) c
 - **Randomização**: Sorteia automaticamente entre as proporções selecionadas
 
 ### Download Automático
-- Download automático de vídeos e imagens gerados
-- Prioriza o botão oficial "BAIXAR" do Grok
-- Fallback inteligente via `src` do elemento quando necessário
+- Download automático de vídeos e imagens gerados via extensão
+- Garante salvamento na subpasta configurada
+- Previne downloads duplicados
+- Salva prompt em arquivo .txt (opcional)
 - Subpasta personalizável dentro de Downloads
 
 ### Upscale de Vídeo (Beta)
@@ -26,6 +32,7 @@ Extensão para automatizar envios no Grok Imagine (`https://grok.com/imagine`) c
 - **Pausa Programada**: A cada X prompts, o script pausa por Y minutos
 - Padrão: Pausa de 3 minutos a cada 90 prompts
 - Ideal para longas sessões de geração, evitando sobrecarga
+- **Botão Zerar Fila**: Para a automação e limpa completamente a fila
 
 ### Overlay Flutuante
 - Exibe em tempo real na página do Grok:
@@ -36,6 +43,7 @@ Extensão para automatizar envios no Grok Imagine (`https://grok.com/imagine`) c
   - Barra de progresso visual
   - Informação de próxima pausa (quando aplicável)
   - Contagem regressiva durante pausas
+  - Limpa automaticamente ao zerar fila
 
 ### Persistência
 - Prompts e configurações salvos localmente
@@ -120,4 +128,18 @@ Se esta ferramenta te ajuda, considere apoiar o projeto:
 
 ---
 
-**Versão 3.0** | Desenvolvido com ❤️
+**Versão 1.3.1** | Desenvolvido com ❤️
+
+## 📝 Changelog
+
+### v1.3.1 (2025-12-14)
+- 🐛 Corrigido download duplicado de vídeos
+- 🐛 Corrigido vídeos não sendo salvos na subpasta configurada
+- 🐛 Corrigido vídeos SD não sendo baixados
+- 🐛 Overlay flutuante agora limpa completamente ao zerar fila
+
+### v1.3.0 (2025-12-14)
+- ✨ Display de versão no header (badge) e footer
+- ✨ Botão "🔄 Zerar Fila" para limpar completamente a automação
+- ✨ Estado de automação persistente (botão "Parar" funciona após reabrir popup)
+- 🔧 Melhorias na lógica de download para garantir pasta correta
