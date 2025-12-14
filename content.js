@@ -1183,26 +1183,22 @@
                         triggerDownload(result.url, 'video', currentPromptIndex);
                         automationState.downloadedVideos.add(currentPromptIndex);
                     } else {
-                        const clicked = clickVideoDownloadButton();
-                        if (clicked) {
-                            automationState.downloadedVideos.add(currentPromptIndex);
-                        } else {
-                            triggerDownload(video.src, 'video', currentPromptIndex);
-                        }
+                        // Fallback: use video src (may be SD if upscale URL not accessible)
+                        console.log('⚠️ URL de upscale não acessível, usando src do vídeo.');
+                        triggerDownload(video.src, 'video', currentPromptIndex);
+                        automationState.downloadedVideos.add(currentPromptIndex);
                     }
                 } else {
-                    const clicked = clickVideoDownloadButton();
-                    if (clicked) {
-                        automationState.downloadedVideos.add(currentPromptIndex);
-                    } else {
-                        triggerDownload(video.src, 'video', currentPromptIndex);
-                    }
+                    // Upscale failed, download SD version
+                    console.log('⚠️ Upscale falhou, baixando vídeo SD.');
+                    triggerDownload(video.src, 'video', currentPromptIndex);
+                    automationState.downloadedVideos.add(currentPromptIndex);
                 }
                 automationState.processingPrompts.delete(currentPromptIndex);
             } else {
                 // Non-upscale path - lock already set synchronously above
                 console.log('⏳ Aguardando renderização final do vídeo (2s)...');
-                await sleep(2000); // Wait for UI to settle (button might appear)
+                await sleep(2000); // Wait for UI to settle
 
                 // Double check after sleep
                 if (automationState.downloadedVideos.has(currentPromptIndex)) {
@@ -1212,20 +1208,15 @@
 
                 console.log('📥 Fazendo download do vídeo SD (upscale desabilitado)');
 
-                // Try to click the button first
-                const clicked = clickVideoDownloadButton();
-
-                // Mark as downloaded IMMEDIATELY to prevent race conditions during the process
+                // Mark as downloaded IMMEDIATELY to prevent race conditions
                 automationState.downloadedVideos.add(currentPromptIndex);
 
-                if (clicked) {
-                    console.log('✅ Botão de download clicado.');
-                    if (automationState.currentIndex >= automationState.prompts.length) {
-                        handleAutomationComplete();
-                    }
-                } else {
-                    console.log('⚠️ Botão de download não encontrado. Usando fallback da extensão.');
-                    triggerDownload(video.src, 'video', currentPromptIndex);
+                // Always use extension download to ensure correct subfolder
+                triggerDownload(video.src, 'video', currentPromptIndex);
+                console.log('✅ Download via extensão iniciado.');
+
+                if (automationState.currentIndex >= automationState.prompts.length) {
+                    handleAutomationComplete();
                 }
 
                 automationState.processingPrompts.delete(currentPromptIndex);
