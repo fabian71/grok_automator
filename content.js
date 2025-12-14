@@ -298,6 +298,23 @@
         }, 200);
     }
 
+    function clearOverlay() {
+        if (!overlayState.container) return;
+
+        // Clear all text content
+        if (overlayState.statusEl) overlayState.statusEl.textContent = '';
+        if (overlayState.promptEl) overlayState.promptEl.textContent = '';
+        if (overlayState.counterEl) overlayState.counterEl.textContent = '';
+        if (overlayState.timerEl) overlayState.timerEl.textContent = '';
+        if (overlayState.progressBar) overlayState.progressBar.style.width = '0%';
+
+        // Reset last data
+        overlayState.lastData = {};
+
+        // Hide the overlay
+        hideOverlay();
+    }
+
     function startOverlayTimer() {
         if (overlayState.timerInterval) return;
         overlayState.timerInterval = setInterval(() => {
@@ -772,7 +789,7 @@
             downloadedVideos: new Set()
         };
         clearAutomationState();
-        hideOverlay();
+        clearOverlay();
         stopOverlayTimer();
     }
 
@@ -1243,7 +1260,7 @@
         };
         clearAutomationState();
         if (stopTimer) stopOverlayTimer();
-        if (!keepOverlay) hideOverlay();
+        if (!keepOverlay) clearOverlay();
     };
 
     const __originalHandleAutomationComplete = handleAutomationComplete;
