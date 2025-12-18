@@ -51,7 +51,11 @@ async function sendMessageWithRetry(tabId, message, maxRetries = 3) {
   }
 }
 
+// Map to temporarily store potential filenames by URL to avoid race conditions with download ID
+const pendingDownloads = new Map();
+
 chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+  // ... existing startAutomation/stopAutomation handlers ...
   if (request.action === "startAutomation") {
     try {
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -74,6 +78,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         .sendMessage({ action: "automationError", error: error.message })
         .catch(() => { });
     }
+    return true;
   }
 
   if (request.action === "stopAutomation") {
@@ -87,6 +92,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     } catch (error) {
       console.error("Erro ao parar automação:", error);
     }
+    return true;
   }
 
   if (request.action === "contentScriptReady" && sender.tab) {
@@ -105,8 +111,8 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     chrome.storage.local.get(["autoDownload", "savePromptTxt", "downloadSubfolder"]).then((settings) => {
       if (!settings.autoDownload) return;
 
-      const subfolder = settings.downloadSubfolder ? settings.downloadSubfolder.trim() : "";
-      const originalPrompt = request.prompt || "imagem"; // Keep original prompt for txt file
+      const subfolder = settings.downloadSubfolder ? settings.downloadSubfolder.trim().replace(/[\\/]+$/g, '') : "";
+      const originalPrompt = request.prompt || "imagem";
 
       const safePrompt = originalPrompt
         .replace(/[\\/:*?"<>|]/g, "_")
@@ -114,10 +120,8 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         .trim()
         .substring(0, 100);
 
-      // Detecta extensão pelo MIME (data:) ou assume png/mp4
       function detectExtFromUrl(url, type) {
-        if (type === 'video') return 'mp4'; // Default for video
-
+        if (type === 'video') return 'mp4';
         try {
           if (url.startsWith("data:image/")) {
             const m = url.match(/^data:image\/([^;]+);/i);
@@ -125,7 +129,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
               const sub = m[1].toLowerCase();
               if (sub === "jpeg") return "jpg";
               if (sub === "svg+xml") return "svg";
-              return sub; // png, webp, gif, etc.
+              return sub;
             }
           }
         } catch (_) { }
@@ -135,66 +139,76 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       const ext = detectExtFromUrl(request.url, request.type);
       const timestamp = Date.now();
       const baseFilename = `${safePrompt}_${timestamp}`;
-      let filename = `${baseFilename}.${ext}`;
+      let mainFilename = `${baseFilename}.${ext}`;
       let txtFilename = `${baseFilename}.txt`;
 
       if (subfolder) {
-        filename = `${subfolder}/${filename}`;
+        mainFilename = `${subfolder}/${mainFilename}`;
         txtFilename = `${subfolder}/${txtFilename}`;
       }
 
-      // Download options - use saveAs to ensure subfolder creation
-      const downloadOptions = {
-        url: request.url,
-        filename: filename,
-        conflictAction: 'uniquify', // Avoid overwriting files
-        saveAs: false // Set to false for automatic download without dialog
-      };
+      // Store filename mapped to URL
+      pendingDownloads.set(request.url, mainFilename);
 
       // Download the image/video
-      chrome.downloads.download(downloadOptions, (downloadId) => {
+      chrome.downloads.download({
+        url: request.url,
+        saveAs: false,
+        conflictAction: 'uniquify'
+      }, (downloadId) => {
         if (chrome.runtime.lastError) {
-          console.error(
-            `Falha ao baixar imagem: ${chrome.runtime.lastError.message}`,
-            `Caminho: ${filename}`
-          );
-          chrome.runtime.sendMessage({
-            action: "updateStatus",
-            message: `Erro ao salvar: ${chrome.runtime.lastError.message.split(": ")[1] || "desconhecido"}`,
-            type: "error",
-          });
+          console.error(`Falha no download da mídia: ${chrome.runtime.lastError.message}`);
+          pendingDownloads.delete(request.url); // Clean up on fail
         } else {
-          console.log(`Download iniciado com sucesso. ID: ${downloadId}, Caminho: ${filename}`);
-
-          // Create and download the .txt file with the prompt (if enabled)
-          if (settings.savePromptTxt) {
-            // Use Data URL instead of Blob URL (works in Service Workers)
-            const txtContent = originalPrompt;
-            const base64Content = btoa(unescape(encodeURIComponent(txtContent)));
-            const txtDataUrl = `data:text/plain;base64,${base64Content}`;
-
-            const txtDownloadOptions = {
-              url: txtDataUrl,
-              filename: txtFilename,
-              conflictAction: 'uniquify',
-              saveAs: false
-            };
-
-            chrome.downloads.download(txtDownloadOptions, (txtDownloadId) => {
-              if (chrome.runtime.lastError) {
-                console.error(`Falha ao salvar arquivo de texto: ${chrome.runtime.lastError.message}`);
-              } else {
-                console.log(`Arquivo de texto salvo com sucesso. ID: ${txtDownloadId}, Caminho: ${txtFilename}`);
-              }
-            });
-          }
+          console.log(`Mídia solicitada. ID: ${downloadId}, Destino: ${mainFilename}`);
         }
       });
+
+      // Create and download the .txt file with the prompt (if enabled)
+      if (settings.savePromptTxt) {
+        const txtContent = originalPrompt;
+        const base64Content = btoa(unescape(encodeURIComponent(txtContent)));
+        const txtDataUrl = `data:text/plain;base64,${base64Content}`;
+
+        pendingDownloads.set(txtDataUrl, txtFilename);
+
+        chrome.downloads.download({
+          url: txtDataUrl,
+          saveAs: false,
+          conflictAction: 'uniquify'
+        }, (txtDownloadId) => {
+          if (chrome.runtime.lastError) {
+            console.error(`Falha no download do texto: ${chrome.runtime.lastError.message}`);
+            pendingDownloads.delete(txtDataUrl);
+          } else {
+            console.log(`Texto solicitado. ID: ${txtDownloadId}, Destino: ${txtFilename}`);
+          }
+        });
+      }
     });
   }
 
-  // We don't keep the message channel open; replies (when needed) are sent via chrome.runtime.sendMessage
-  return false;
+  return true;
+});
+
+// Listener robusto para forçar nomes de arquivos e pastas
+chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+  // Check if we have a pending name for this URL
+  if (pendingDownloads.has(item.url)) {
+    console.log(`[onDeterminingFilename] Interceptado URL: ${item.url}`);
+    const desiredFilename = pendingDownloads.get(item.url);
+    pendingDownloads.delete(item.url); // Clean up
+
+    suggest({
+      filename: desiredFilename,
+      conflictAction: 'uniquify'
+    });
+    return;
+  }
+
+  // Fallback: If URL doesn't match exactly (maybe changed by browser), we might miss it.
+  // But for data-urls and specific blobs, it usually matches.
+  // If we miss, standard browser behavior applies.
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
