@@ -1,4 +1,4 @@
-# Grok Prompt Automator 1.3.1
+# Grok Prompt Automator 1.4.0
 
 Extensão para automatizar envios no Grok Imagine (`https://grok.com/imagine`) com suporte completo para **geração de imagens e vídeos**: envia prompts em lote, aplica proporções, faz upscale de vídeos e baixa os arquivos gerados automaticamente.
 
@@ -14,7 +14,7 @@ Extensão para automatizar envios no Grok Imagine (`https://grok.com/imagine`) c
 - **Modo Imagem**: Geração de imagens com download automático
 
 ### Configurações de Proporção
-- Proporção fixa: **1:1 (Square)**, **2:3 (Portrait)**, **3:2 (Landscape)**
+- Proporção fixa: **1:1 (Square)**, **2:3 (Portrait)**, **3:2 (Landscape)**, **9:16 (Vertical)**, **16:9 (Widescreen)**
 - **Randomização**: Sorteia automaticamente entre as proporções selecionadas
 
 ### Download Automático
@@ -128,9 +128,13 @@ Se esta ferramenta te ajuda, considere apoiar o projeto:
 
 ---
 
-**Versão 1.3.1** | Desenvolvido com ❤️
+**Versão 1.4.0** | Desenvolvido com ❤️
 
 ## 📝 Changelog
+
+### v1.4.0 (2025-12-29)
+- ✨ Novas proporções: **9:16 (Vertical)** e **16:9 (Widescreen)**
+- 🎨 Atualizado para suportar todas as proporções disponíveis no Grok
 
 ### v1.3.1 (2025-12-14)
 - 🐛 Corrigido download duplicado de vídeos
