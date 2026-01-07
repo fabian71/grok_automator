@@ -43,7 +43,8 @@
             ...automationState,
             upscaledPrompts: Array.from(automationState.upscaledPrompts),
             processingPrompts: Array.from(automationState.processingPrompts),
-            downloadedVideos: Array.from(automationState.downloadedVideos)
+            downloadedVideos: Array.from(automationState.downloadedVideos),
+            processedVideoUrls: Array.from(automationState.processedVideoUrls)
         };
         delete stateToSave.timeoutId;
         await chrome.storage.local.set({ 'grokAutomationState': stateToSave });
@@ -60,9 +61,10 @@
                 const saved = result.grokAutomationState;
                 automationState = {
                     ...saved,
-                    upscaledPrompts: new Set(saved.upscaledPrompts),
-                    processingPrompts: new Set(saved.processingPrompts),
-                    downloadedVideos: new Set(saved.downloadedVideos),
+                    upscaledPrompts: new Set(saved.upscaledPrompts || []),
+                    processingPrompts: new Set(saved.processingPrompts || []),
+                    downloadedVideos: new Set(saved.downloadedVideos || []),
+                    processedVideoUrls: new Set(saved.processedVideoUrls || []),
                     timeoutId: null,
                     restoredFromReload: true,
                     modeApplied: false // Force re-check of mode on new page
@@ -799,10 +801,21 @@
             return;
         }
 
-        // --- Reload Logic for Image Mode ---
-        // Se estiver no modo imagem e NÃO acabou de ser restaurado, recarrega a página para limpar o chat
-        if (automationState.mode === 'image' && !automationState.restoredFromReload) {
-            console.log('🔄 Recarregando página para limpar estado (Modo Imagem)...');
+        // --- Reload/Redirect Logic ---
+        const isPostPage = window.location.pathname.includes('/imagine/post/');
+
+        // Se estiver no modo imagem (que exige chat limpo) OU se estivermos em uma página de post (onde botões de modelo costumam sumir)
+        // E NÃO acabamos de ser restaurados por um reload
+        if ((automationState.mode === 'image' || isPostPage) && !automationState.restoredFromReload) {
+            // Se houver algo sendo processado (upscale, etc), aguarda um pouco mais em vez de redirecionar agora
+            console.log(`🔍 [runAutomation] Verificando processingPrompts.size = ${automationState.processingPrompts.size}`);
+            if (automationState.processingPrompts && automationState.processingPrompts.size > 0) {
+                console.log('⏳ Aguardando conclusão de processamento (upscale) antes de mudar de página...');
+                automationState.timeoutId = setTimeout(runAutomation, 3000);
+                return;
+            }
+
+            console.log(`🔄 Redirecionando para /imagine para garantir UI correta (Modo: ${automationState.mode}, Post: ${isPostPage})...`);
             await saveAutomationState();
             window.location.href = 'https://grok.com/imagine';
             return;
@@ -1155,16 +1168,20 @@
     }
 
     // --- Override: prefer botão oficial para download de vídeo após upscale ---
-    function processVideoElement(video) {
+    async function processVideoElement(video) {
         const currentPromptIndex = automationState.currentIndex - 1;
         const shouldUpscale = automationState.settings.upscale;
 
+        console.log(`🔍 [processVideoElement] Índice: ${currentPromptIndex}, Upscale: ${shouldUpscale}`);
+
         if (automationState.processingPrompts.has(currentPromptIndex) || automationState.downloadedVideos.has(currentPromptIndex)) {
+            console.log(`⏭️ [processVideoElement] Prompt ${currentPromptIndex} já está sendo processado ou baixado. Ignorando.`);
             return;
         }
 
         // SET LOCK SYNCHRONOUSLY - This is critical to prevent race conditions
         automationState.processingPrompts.add(currentPromptIndex);
+        console.log(`🔒 [processVideoElement] Lock adicionado para prompt ${currentPromptIndex}. processingPrompts.size = ${automationState.processingPrompts.size}`);
 
         const process = async () => {
             if (shouldUpscale) {
@@ -1193,6 +1210,7 @@
                     triggerDownload(video.src, 'video', currentPromptIndex);
                 }
                 automationState.processingPrompts.delete(currentPromptIndex);
+                console.log(`🔓 [processVideoElement] Lock removido para prompt ${currentPromptIndex} (upscale path). processingPrompts.size = ${automationState.processingPrompts.size}`);
             } else {
                 // Non-upscale path - lock already set synchronously above
                 console.log('⏳ Aguardando renderização final do vídeo (2s)...');
@@ -1216,9 +1234,10 @@
                 }
 
                 automationState.processingPrompts.delete(currentPromptIndex);
+                console.log(`🔓 [processVideoElement] Lock removido para prompt ${currentPromptIndex} (non-upscale path). processingPrompts.size = ${automationState.processingPrompts.size}`);
             }
         };
-        process();
+        await process();
     }
 
     // Mantém overlay visível ao finalizar e mostra elapsed; injeta status de upscale
@@ -1269,7 +1288,7 @@
     };
 
     const __originalProcessVideoElement = processVideoElement;
-    processVideoElement = function (video) {
+    processVideoElement = async function (video) {
         const currentPromptIndex = automationState.currentIndex - 1;
 
         // Early return if already processing or downloaded
@@ -1287,7 +1306,7 @@
                 total: automationState.prompts.length
             });
         }
-        return __originalProcessVideoElement(video);
+        return await __originalProcessVideoElement(video);
     };
 
     function initialize() {
