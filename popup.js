@@ -29,6 +29,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const modeVideoRadio = document.getElementById('mode-video');
     const upscaleContainer = document.getElementById('upscale-container');
     const upscaleToggle = document.getElementById('toggle-upscale');
+    const videoDurationContainer = document.getElementById('video-duration-comp');
+    const duration6sRadio = document.getElementById('duration-6s');
+    const duration10sRadio = document.getElementById('duration-10s');
 
     // --- Break Settings Elements ---
     const breakToggle = document.getElementById('toggle-break');
@@ -60,7 +63,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const keys = [
             'prompts', 'delay', 'autoDownload', 'savePromptTxt', 'downloadSubfolder',
             'randomizeToggle', 'randomizeOptions', 'generationMode', 'aspectRatio', 'upscaleVideo',
-            'breakEnabled', 'breakPrompts', 'breakDuration', 'isRunning'
+            'videoDuration', 'breakEnabled', 'breakPrompts', 'breakDuration', 'isRunning'
         ];
         chrome.storage.local.get(keys).then((result) => {
             promptsTextarea.value = result.prompts || '';
@@ -101,6 +104,13 @@ document.addEventListener('DOMContentLoaded', function () {
             } else {
                 modeVideoRadio.checked = true; // default
                 upscaleContainer.style.display = 'flex';
+                videoDurationContainer.style.display = 'block';
+            }
+
+            if (result.videoDuration === '6s') {
+                duration6sRadio.checked = true;
+            } else {
+                duration10sRadio.checked = true; // default
             }
 
             updateRandomizeUI();
@@ -127,6 +137,7 @@ document.addEventListener('DOMContentLoaded', function () {
             randomizeOptions: randomizeOptions,
             generationMode: modeVideoRadio.checked ? 'video' : 'image',
             upscaleVideo: upscaleToggle.checked,
+            videoDuration: duration6sRadio.checked ? '6s' : '10s',
             breakEnabled: breakToggle.checked,
             breakPrompts: parseInt(breakPromptsInput.value) || 90,
             breakDuration: parseInt(breakDurationInput.value) || 3
@@ -180,8 +191,10 @@ document.addEventListener('DOMContentLoaded', function () {
     function updateModeUI() {
         if (modeVideoRadio.checked) {
             upscaleContainer.style.display = 'flex';
+            videoDurationContainer.style.display = 'block';
         } else {
             upscaleContainer.style.display = 'none';
+            videoDurationContainer.style.display = 'none';
         }
         updateDownloadUI();
         updateDelayWarning();
@@ -226,6 +239,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     aspectRatios: ratiosToRandomize,
                     fixedRatio: aspectRatioSelect.value,
                     upscale: upscaleToggle.checked,
+                    videoDuration: duration6sRadio.checked ? '6s' : '10s',
                     autoDownload: autoDownloadCheckbox.checked,
                     breakEnabled: breakToggle.checked,
                     breakPrompts: parseInt(breakPromptsInput.value) || 90,
@@ -300,7 +314,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const elementsToDisable = [
             startBtn, promptsTextarea, delayInput, autoDownloadCheckbox, downloadSubfolderName,
             saveDownloadFolder, randomizeToggle, aspectRatioSelect, ...randomOptionCheckboxes,
-            modeImageRadio, modeVideoRadio, upscaleToggle
+            modeImageRadio, modeVideoRadio, upscaleToggle, duration6sRadio, duration10sRadio
         ];
         if (isRunning) {
             elementsToDisable.forEach(el => el.disabled = true);
@@ -342,7 +356,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const elementsToAutoSave = [
         promptsTextarea, delayInput, autoDownloadCheckbox, savePromptTxtCheckbox,
         randomizeToggle, aspectRatioSelect, ...randomOptionCheckboxes,
-        modeImageRadio, modeVideoRadio, upscaleToggle
+        modeImageRadio, modeVideoRadio, upscaleToggle, duration6sRadio, duration10sRadio
     ];
     elementsToAutoSave.forEach(el => {
         const eventType = el.type === 'textarea' || el.type === 'number' || el.type === 'text' ? 'input' : 'change';

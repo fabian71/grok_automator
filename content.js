@@ -21,7 +21,8 @@
             autoDownload: false,
             breakEnabled: false,
             breakPrompts: 90,
-            breakDuration: 3
+            breakDuration: 3,
+            videoDuration: '10s'
         },
         mode: 'video',
         modeApplied: false,
@@ -547,6 +548,44 @@
         return false;
     }
 
+    async function selectVideoDuration(duration) {
+        const targetDuration = duration || '10s'; // '6s' or '10s'
+        console.log(`⏱️ Ajustando duração do vídeo para: ${targetDuration}`);
+
+        const trigger = findModelOptionsTrigger();
+        if (!trigger) {
+            console.warn('Botão de opções de modelo não encontrado para ajustar duração.');
+            return false;
+        }
+
+        // Try up to 3 times
+        for (let attempt = 0; attempt < 3; attempt++) {
+            // Ensure menu is open
+            forceClick(trigger);
+            await sleep(500);
+
+            // Find buttons
+            const buttons = findAllElements('button[aria-label]');
+            const targetBtn = buttons.find(btn => {
+                const label = btn.getAttribute('aria-label') || '';
+                return label === targetDuration;
+            });
+
+            if (targetBtn && isVisible(targetBtn)) {
+                forceClick(targetBtn);
+                console.log(`✅ Duração ${targetDuration} selecionada com sucesso.`);
+                await sleep(300);
+                return true;
+            }
+
+            // If failed, wait a bit before retrying
+            await sleep(300);
+        }
+
+        console.warn(`⚠️ Não foi possível encontrar/clicar na duração: ${targetDuration}`);
+        return false;
+    }
+
     async function selectAspectRatio(aspectRatio) {
         const target = aspectRatio || '';
         let option = findAspectRatioOption(target);
@@ -832,6 +871,12 @@
         if (automationState.mode === 'video' || !automationState.modeApplied) {
             console.log(`🎯 Selecionando modo ${automationState.mode} antes do prompt...`);
             await selectGenerationMode(automationState.mode);
+
+            if (automationState.mode === 'video') {
+                await sleep(500);
+                await selectVideoDuration(automationState.settings.videoDuration);
+            }
+
             automationState.modeApplied = true;
         }
 
